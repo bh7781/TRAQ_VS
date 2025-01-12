@@ -62,10 +62,7 @@ def save_columns_to_json(df, regime_name, asset_class):
 
     # Construct sanitized filename
     safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-
-    logger.debug(f'safe_filename: {safe_filename}')
-    logger.debug(f'safe_base_dir: {safe_base_dir}')
-    json_file = os.path.join(safe_base_dir, safe_filename)
+    json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
 
     # Ensure the asset class exists for the regime
     if asset_class not in column_json_location.get(regime_name):
@@ -93,7 +90,7 @@ def load_columns_from_json(regime_name, asset_class):
 
     # Construct a sanitized filename
     safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-    json_file = os.path.join(safe_base_dir, safe_filename)
+    json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
 
     # Confirm the asset class is valid for this regime
     if asset_class not in column_json_location[regime_name]:

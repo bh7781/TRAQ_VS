@@ -351,3 +351,19 @@ def sanitize_run_date(date_str):
     except ValueError:
         raise ValueError(f"Invalid run_date: {date_str}. Must be YYYY-MM-DD format.")
     return date_str
+
+def sanitize_filename(filename):
+    """
+    Sanitize the filename to prevent path traversal attacks.
+    """
+    return os.path.basename(filename)
+
+def get_safe_filepath(base_dir, filename):
+    """
+    Construct a safe file path by sanitizing the filename and ensuring it is within the base directory.
+    """
+    sanitized_filename = sanitize_filename(filename)
+    safe_filepath = os.path.join(base_dir, sanitized_filename)
+    if not os.path.commonpath([safe_filepath, base_dir]) == base_dir:
+        raise ValueError("Attempted Path Traversal Attack Detected")
+    return safe_filepath
