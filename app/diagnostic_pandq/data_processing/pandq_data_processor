@@ -37,7 +37,7 @@ class PANDQDataProcessor:
                 r'\r\n': '_',   # Replace carriage return + newline sequence ('\r\n') with an underscore ('_')
                 r'"': '',       # Remove double quote characters ('"') completely (replace with an empty string)
                 r'\|': '_',     # Replace pipe characters ('|') with an underscore ('_')
-                r',': ';'       # Replace commas (',') with a semi-colon (';')
+                r',': ''        # Remove commas (',') completely (replace with an empty string)
             }, regex=True, inplace=True)
 
             # Convert all data values to strings
