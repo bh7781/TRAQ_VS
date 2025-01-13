@@ -4,6 +4,7 @@ import traceback
 import os
 import json
 import sys
+from pathlib import Path
 
 import pandas as pd
 
@@ -75,15 +76,32 @@ def save_columns_to_json(df, regime_name, asset_class):
     if asset_class not in column_json_location.get(regime_name):
         raise ValueError(f"Invalid asset class: {asset_class} for regime: {regime_name}.")
 
+    json_path = Path(json_file)
+
+    # Verify the directory exists
+    if not json_path.parent.exists():
+        raise ValueError(
+            f"Directory does not exist: {json_path.parent}. "
+            "Please ensure the directory is created through proper channels."
+        )
+
+    # Verify write permissions
+    if json_path.exists() and not os.access(json_path, os.W_OK):
+        raise PermissionError(f"No write permission for file: {json_path}")
+
     # Sanitize column names before writing them to JSON
     sanitized_columns = [utility.sanitize_string(col) for col in df.columns]
 
-    # Save the column names to the JSON file
-    with open(json_file, 'w') as f:
-        # Save as a JSON array with indentation for readability
-        json.dump(sanitized_columns, f, indent=4)
+    try:
+        # Write to the file
+        with json_path.open('w', encoding='utf-8') as f:
+            json.dump(sanitized_columns, f, indent=4)
 
-    logger.info(f"Saved columns for {regime_name}-{asset_class} at {json_file}")
+        logger.info(f"Successfully saved columns for {regime_name}-{asset_class} at {json_path}")
+
+    except Exception as ex:
+        logger.error(f"Failed to save columns to {json_path}: {str(ex)}")
+        raise
 
 
 def load_columns_from_json(regime_name, asset_class):
