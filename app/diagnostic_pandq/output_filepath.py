@@ -104,15 +104,15 @@ def get_column_json_location(env):
         },
 
         constants.EMIR_REFIT: {
-            constants.COMMODITY: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.CREDIT: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.EQUITY_DERIVATIVES: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.EQUITY_SWAPS: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.FOREIGN_EXCHANGE: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.INTEREST_RATES: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.COLLATERAL: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.EXCHANGE_TRADES_DERIVATIVES_ACTIVITY: os.path.join(base_path, 'emir_refit', 'columns'),
-            constants.EXCHANGE_TRADES_DERIVATIVES_POSITION: os.path.join(base_path, 'emir_refit', 'columns'),
+            constants.COMMODITY: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_co_pandq_columns.json'),
+            constants.CREDIT: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_cr_pandq_columns.json'),
+            constants.EQUITY_DERIVATIVES: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_eqd_pandq_columns.json'),
+            constants.EQUITY_SWAPS: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_eqs_pandq_columns.json'),
+            constants.FOREIGN_EXCHANGE: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_fx_pandq_columns.json'),
+            constants.INTEREST_RATES: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_ir_pandq_columns.json'),
+            constants.COLLATERAL: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_col_pandq_columns.json'),
+            constants.EXCHANGE_TRADES_DERIVATIVES_ACTIVITY: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_etdactivity_pandq_columns.json'),
+            constants.EXCHANGE_TRADES_DERIVATIVES_POSITION: os.path.join(base_path, 'emir_refit', 'columns', 'emir_refit_etdposition_pandq_columns.json'),
         },
         # Add output paths for other regimes below...
     }

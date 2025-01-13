@@ -37,8 +37,12 @@ def rename_columns_from_json(df, json_file_path):
     """
     Rename specific DataFrame columns based on key-value pairs in a JSON file.
     """
+    base_dir = os.path.dirname(json_file_path)
+    file_name = os.path.basename(json_file_path)
+    safe_path = utility.get_safe_filepath(base_dir, file_name)
+
     # Load the JSON file containing only the columns that need to be renamed
-    utility.validate_file_existence(json_file_path, logger=logger)
+    utility.validate_file_existence(safe_path, logger=logger)
     with open(json_file_path, 'r') as f:
         column_mappings = json.load(f)
 
@@ -61,17 +65,23 @@ def save_columns_to_json(df, regime_name, asset_class):
     safe_base_dir = column_json_location[regime_name].get(asset_class)
 
     # Construct sanitized filename
-    safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-    json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
+    # safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
+    # json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
+    json_file = safe_base_dir
+
+    logger.debug(f'json_file: {json_file}')
 
     # Ensure the asset class exists for the regime
     if asset_class not in column_json_location.get(regime_name):
         raise ValueError(f"Invalid asset class: {asset_class} for regime: {regime_name}.")
 
+    # Sanitize column names before writing them to JSON
+    sanitized_columns = [utility.sanitize_string(col) for col in df.columns]
+
     # Save the column names to the JSON file
     with open(json_file, 'w') as f:
         # Save as a JSON array with indentation for readability
-        json.dump(df.columns.tolist(), f, indent=4)
+        json.dump(sanitized_columns, f, indent=4)
 
     logger.info(f"Saved columns for {regime_name}-{asset_class} at {json_file}")
 
@@ -89,8 +99,9 @@ def load_columns_from_json(regime_name, asset_class):
     safe_base_dir = column_json_location[regime_name].get(asset_class)
 
     # Construct a sanitized filename
-    safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-    json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
+    # safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
+    # json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
+    json_file = safe_base_dir
 
     # Confirm the asset class is valid for this regime
     if asset_class not in column_json_location[regime_name]:
@@ -372,6 +383,7 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
     and applying PANDQ-specific data processing.
     """
     try:
+        asset_class = utility.sanitize_asset_class(asset_class)
         regime_name = Config().regime.upper()
         logger.info(f'Started execution for {regime_name}-{asset_class}')
 
@@ -440,7 +452,8 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
         safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
         logger.debug(f'safe_base_dir: {safe_base_dir}')
         logger.debug(f'safe_filename: {safe_filename}')
-        json_file = os.path.join(safe_base_dir, safe_filename)
+        # json_file = os.path.join(safe_base_dir, safe_filename)
+        json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
 
         if os.path.exists(json_file):
             logger.info("JSON file already exists, loading columns...")
@@ -545,7 +558,7 @@ def main():
     # Process each asset class
     for asset_class in asset_classes:
         try:
-            df_merged = process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
+            df_merged = process_asset_class(utility.sanitize_asset_class(asset_class), tsr_filepaths, gleif_dict, filepath_config)
 
             # Log matching status summary for this asset class
             if df_merged is not None and not df_merged.empty:

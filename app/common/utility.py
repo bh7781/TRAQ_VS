@@ -352,18 +352,35 @@ def sanitize_run_date(date_str):
         raise ValueError(f"Invalid run_date: {date_str}. Must be YYYY-MM-DD format.")
     return date_str
 
+
 def sanitize_filename(filename):
     """
     Sanitize the filename to prevent path traversal attacks.
     """
     return os.path.basename(filename)
 
-def get_safe_filepath(base_dir, filename):
+
+def sanitize_string(input_str: str) -> str:
     """
-    Construct a safe file path by sanitizing the filename and ensuring it is within the base directory.
+    Replace all non-alphanumeric/underscore characters with underscores,
+    and convert to lowercase.
     """
-    sanitized_filename = sanitize_filename(filename)
-    safe_filepath = os.path.join(base_dir, sanitized_filename)
-    if not os.path.commonpath([safe_filepath, base_dir]) == base_dir:
-        raise ValueError("Attempted Path Traversal Attack Detected")
-    return safe_filepath
+    return re.sub(r'[^0-9a-zA-Z_]', '_', input_str.strip()).lower()
+
+
+def get_safe_filepath(base_dir, user_input_path):
+    """
+    Safely join a base directory with a user-provided path to prevent path traversal.
+    Raises ValueError if the resolved path is outside the base directory.
+    """
+    # Normalize the user input path to remove any '../' or './' sequences
+    normalized_user_input = os.path.normpath(user_input_path)
+
+    # Construct the full path
+    full_path = os.path.join(base_dir, normalized_user_input)
+
+    # Convert both to absolute paths and check if the full_path is within base_dir
+    if not os.path.abspath(full_path).startswith(os.path.abspath(base_dir)):
+        raise ValueError(f"Unsafe file path detected: {full_path}")
+
+    return full_path
