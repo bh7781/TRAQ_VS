@@ -21,7 +21,6 @@ class DerivOneDeduplicator:
                                  log_to_file=log_to_file)
         self.huti_prefix = HARMONIZED_UTI_PREFIX.get(self.asset_class)
         self.huti_value = HARMONIZED_UTI_VALUE.get(self.asset_class)
-        self.party1_lei_col = PARTY1_LEI.get(self.asset_class)
 
     def create_deduplication_key(self):
         """
@@ -40,45 +39,76 @@ class DerivOneDeduplicator:
             chunk = self.data.iloc[start_idx:end_idx]
             chunk_idx = chunk.index
 
+            huti_prefixes = chunk[self.huti_prefix].astype('string').fillna('').str.strip()
+            uti_prefixes = chunk['UTI Prefix'].astype('string').fillna('').str.strip()
+            usi_prefixes = chunk['USI Prefix'].astype('string').fillna('').str.strip()
+
             # Convert to strings and handle nulls
-            huti_values = chunk[self.huti_value].fillna('').astype(str).str.strip()
-            uti_values = chunk['UTI Value'].fillna('').astype(str).str.strip()
-            usi_values = chunk['USI Value'].fillna('').astype(str).str.strip()
+            huti_values = chunk[self.huti_value].astype('string').fillna('').str.strip()
+            uti_values = chunk['UTI Value'].astype('string').fillna('').str.strip()
+            usi_values = chunk['USI Value'].astype('string').fillna('').str.strip()
 
-            # Create dedup key for chunk using string operations
-            chunk_key = huti_values.copy()
-            chunk_key = chunk_key.where(chunk_key != '', uti_values)
-            chunk_key = chunk_key.where(chunk_key != '', usi_values)
+            if self.asset_class == constants.EQUITY_DERIVATIVES:
+                # Create the combined key
+                combined_key = (
+                        huti_prefixes +
+                        huti_values +
+                        uti_prefixes +
+                        uti_values +
+                        usi_prefixes +
+                        usi_values
+                )
 
-            # Handle missing values
-            mask = chunk_key == ''
-            if mask.any():
-                # Create placeholder values only for missing entries
-                missing_indices = mask[mask].index
-                placeholders = [f'missing_placeholder{i}' for i in
-                                range(start_idx + 1, start_idx + len(missing_indices) + 1)]
-                chunk_key[missing_indices] = placeholders
+                # If everything ends up empty, assign a placeholder
+                mask_empty = combined_key == ''
+                if mask_empty.any():
+                    missing_indices = mask_empty[mask_empty].index
+                    placeholders = [f'missing_placeholder{i}' for i in range(start_idx + 1, start_idx + len(missing_indices) + 1)]
+                    combined_key[missing_indices] = placeholders
 
-            # Handle asset class specific prefixes
-            if self.asset_class in [constants.EQUITY_DERIVATIVES, constants.EQUITY_SWAPS]:
-                huti_prefixes = chunk[self.huti_prefix].fillna('').astype(str)
-                uti_prefixes = chunk['UTI Prefix'].fillna('').astype(str)
-                usi_prefixes = chunk['USI Prefix'].fillna('').astype(str)
-                prefixes = uti_prefixes.where(huti_values != '', usi_prefixes)
-                # chunk_key = prefixes + chunk_key
-                chunk_key = huti_prefixes.where(huti_values != '', prefixes) + chunk_key
-                del huti_prefixes, prefixes, uti_prefixes, usi_prefixes
+                dedup_keys[chunk_idx] = combined_key
+                del combined_key, huti_prefixes, uti_prefixes, usi_prefixes
+
             else:
-                if self.party1_lei_col in chunk.columns:
-                    party1_lei = chunk[self.party1_lei_col].fillna('').astype(str)
-                    chunk_key = party1_lei + chunk_key
-                    del party1_lei
+                # Get LEI based on asset class
+                if self.asset_class == constants.EQUITY_SWAPS:
+                    lei = chunk['party1_lei_derived'].astype('string').fillna('').str.strip()
+                else:
+                    lei = chunk[PARTY1_LEI.get(self.asset_class)].astype('string').fillna('').str.strip()
 
-            # Assign chunk results directly to pre-allocated Series
-            dedup_keys[chunk_idx] = chunk_key
+                # Initialize chunk_key as empty Series
+                chunk_key = pd.Series('', index=chunk.index)
+
+                # Apply the prioritization logic
+                # 1. If HUTI value is populated - Treat '' or 'NOHUTIPROVIDED' (case-insensitive) as empty HUTI
+                # huti_is_empty = ((huti_values == '') |
+                #                  (huti_values.str.contains('NOHUTIPROVIDED', case=False, na=False)) |
+                #                  (huti_prefixes.str.contains('NOHUTIPROVIDED', case=False, na=False)))
+                huti_is_empty = (huti_values == '') | (huti_values.str.upper() == 'NOHUTIPROVIDED') | (huti_prefixes.str.upper() == 'NOHUTIPROVIDED')
+                huti_mask = ~huti_is_empty
+                chunk_key[huti_mask] = lei[huti_mask] + huti_prefixes[huti_mask] + huti_values[huti_mask]
+
+                # 2. If HUTI is blank but USI is populated
+                usi_mask = huti_is_empty & (usi_values != '')
+                chunk_key[usi_mask] = lei[usi_mask] + usi_prefixes[usi_mask] + usi_values[usi_mask]
+
+                # 3. If both HUTI and USI are blank, use UTI
+                uti_mask = huti_is_empty & (usi_values == '')
+                chunk_key[uti_mask] = lei[uti_mask] + uti_prefixes[uti_mask] + uti_values[uti_mask]
+
+                # Handle completely empty cases
+                mask_empty = chunk_key == ''
+                if mask_empty.any():
+                    missing_indices = mask_empty[mask_empty].index
+                    placeholders = [f'missing_placeholder{i}' for i in
+                                    range(start_idx + 1, start_idx + len(missing_indices) + 1)]
+                    chunk_key[missing_indices] = placeholders
+
+                dedup_keys[chunk_idx] = chunk_key
+                del chunk_key, lei
 
             # Clean up temporary variables
-            del chunk_key, huti_values, uti_values, usi_values, chunk
+            del chunk
 
         # Create new column all at once and convert to categorical
         # Using a temporary DataFrame to avoid fragmentation

@@ -1,10 +1,30 @@
+"""
+Usage:
+    python diagnostic_pandq_main.py --env <env> --regime <regime> --run_date <YYYY-MM-DD> [--asset_classes <ASSET_CLASS1> <ASSET_CLASS2> ...]
+
+Examples:
+    1. When Running for all asset classes of emir_refit:
+    python --env prod --regime emir_refit --run_date 2025-01-22 --asset_classes CO CR EQD EQS FX IR COL ETDACTIVITY ETDPOSITION
+
+    2. When Running for a particular asset class of emir_refit
+    python --env prod --regime emir_refit --run_date 2025-01-22 --asset_classes CO
+    python --env prod --regime emir_refit --run_date 2025-01-22 --asset_classes CR
+    python --env prod --regime emir_refit --run_date 2025-01-22 --asset_classes FX
+
+Arguments:
+    -e, --env                  Environment (qa or prod)
+    -r, --regime               Regime to run (asic, mas, jfsa, emir_refit etc.)
+    -d, --run_date             The run/execution date (YYYY-MM-DD)
+    -a, --asset_classes        List of asset classes to process (optional)
+"""
+
 import time
 import argparse
 import traceback
 import os
 import json
 import sys
-from pathlib import Path
+# from pathlib import Path
 
 import pandas as pd
 
@@ -44,7 +64,7 @@ def rename_columns_from_json(df, json_file_path):
 
     # Load the JSON file containing only the columns that need to be renamed
     utility.validate_file_existence(safe_path, logger=logger)
-    with open(json_file_path, 'r') as f:
+    with open(safe_path, 'r') as f:
         column_mappings = json.load(f)
 
     # Rename DataFrame columns based on JSON key-value pairs (if the columns exist in the DataFrame)
@@ -53,90 +73,44 @@ def rename_columns_from_json(df, json_file_path):
     return df
 
 
-def save_columns_to_json(df, regime_name, asset_class):
+def save_columns_to_json(df, safe_path):
     """
-    Save column names from the DataFrame as a JSON file.
+    Saves DataFrame columns to a JSON.
     """
-    # Sanitize and validate the regime & asset_class
-    regime_name = utility.sanitize_regime(regime_name)
-    asset_class = utility.sanitize_asset_class(asset_class)
-
-    # Get the appropriate file path for saving the JSON
-    column_json_location = get_column_json_location(Config().env.lower())
-    safe_base_dir = column_json_location[regime_name].get(asset_class)
-
-    # Construct sanitized filename
-    # safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-    # json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
-    json_file = safe_base_dir
-
-    logger.debug(f'json_file: {json_file}')
-
-    # Ensure the asset class exists for the regime
-    if asset_class not in column_json_location.get(regime_name):
-        raise ValueError(f"Invalid asset class: {asset_class} for regime: {regime_name}.")
-
-    json_path = Path(json_file)
-
-    # Verify the directory exists
-    if not json_path.parent.exists():
-        raise ValueError(
-            f"Directory does not exist: {json_path.parent}. "
-            "Please ensure the directory is created through proper channels."
-        )
-
-    # Verify write permissions
-    if json_path.exists() and not os.access(json_path, os.W_OK):
-        raise PermissionError(f"No write permission for file: {json_path}")
-
-    # Sanitize column names before writing them to JSON
-    sanitized_columns = [utility.sanitize_string(col) for col in df.columns]
-
+    # Write columns to JSON
+    columns_list = list(df.columns)
     try:
-        # Write to the file
-        with json_path.open('w', encoding='utf-8') as f:
-            json.dump(sanitized_columns, f, indent=4)
-
-        logger.info(f"Successfully saved columns for {regime_name}-{asset_class} at {json_path}")
-
+        with open(safe_path, 'w', encoding='utf-8') as f:
+            json.dump(columns_list, f, indent=4)
+        logger.info(f"Successfully saved columns at {safe_path}")
+    except PermissionError as ex:
+        logger.error(f"Permission denied writing to {safe_path}: {str(ex)}")
+        raise
     except Exception as ex:
-        logger.error(f"Failed to save columns to {json_path}: {str(ex)}")
+        logger.error(f"Failed to save columns to {safe_path}: {str(ex)}")
         raise
 
 
-def load_columns_from_json(regime_name, asset_class):
+def load_columns_from_json(safe_path):
     """
-    Load column names from a previously saved JSON file.
+    Loads column names JSON.
     """
-    # Sanitize and validate the regime & asset_class
-    regime_name = utility.sanitize_regime(regime_name)
-    asset_class = utility.sanitize_asset_class(asset_class)
+    # Load and return columns
+    if not os.path.isfile(safe_path):
+        logger.error(f"JSON file not found: {safe_path}")
+        raise FileNotFoundError(f"JSON file not found: {safe_path}")
 
-    # Retrieve the safe base directory from config
-    column_json_location = get_column_json_location(Config().env.lower())
-    safe_base_dir = column_json_location[regime_name].get(asset_class)
-
-    # Construct a sanitized filename
-    # safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-    # json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
-    json_file = safe_base_dir
-
-    # Confirm the asset class is valid for this regime
-    if asset_class not in column_json_location[regime_name]:
-        raise ValueError(f"Invalid asset class: {asset_class} for regime: {regime_name}.")
-
-    # Validate that the file actually exists
-    utility.validate_file_existence(json_file, logger=logger)
-    if not os.path.exists(json_file):
-        logger.error(f"JSON file not found: {json_file}. Cannot validate columns for {asset_class}.")
-        raise FileNotFoundError(f"JSON file not found: {json_file}")
-
-    # Load and return the JSON contents
-    with open(json_file, 'r') as f:
-        saved_columns = json.load(f)
-
-    logger.info(f"Loaded columns from JSON for {regime_name}-{asset_class} at {json_file}.")
-    return saved_columns
+    try:
+        with open(safe_path, 'r', encoding='utf-8') as f:
+            saved_columns = json.load(f)
+        logger.info(f"Loaded columns from {safe_path}")
+        return saved_columns
+    except json.JSONDecodeError as ex:
+        logger.error(f"Invalid JSON in {safe_path}: {str(ex)}")
+        raise
+    except Exception as ex:
+        logger.error(f"Failed to load columns from {safe_path}: {str(ex)}")
+        raise
 
 
 def log_matching_status_summary(report_date, asset_class, df, summary_dict):
@@ -228,14 +202,13 @@ def merge_datasets(df_tsr, df_derivone, asset_class):
     return df_merged
 
 
-def read_datasets(report_type, filepath_list, skiprow=0, skipfooter=0, asset_class=None, dtype=None, regime=None):
+def read_datasets(report_type, filepath_list, skiprow=0, skipfooter=0, asset_class=None, dtype=None, regime=None, logger=None):
     """
     Reads and processes datasets based on the provided report type and file paths.
     """
     utility.validate_file_existence(filepath_list, logger=logger)
-
-    data_processor = DataProcessor(report_type, skiprow, skipfooter, asset_class, dtype=dtype,
-                                   regime=regime, logger=logger)
+    logger.debug(f'Logger object from main.py: {logger}')
+    data_processor = DataProcessor(report_type, skiprow, skipfooter, asset_class, dtype=dtype, regime=regime, logger=logger)
     return data_processor.process_data(file_paths=filepath_list)
 
 
@@ -273,10 +246,11 @@ def process_derivone(report_date, asset_class, filepath_config):
         report_type='derivone',
         asset_class=asset_class,
         filepath_list=derivone_filepaths.get(asset_class),
-        dtype=dtype_config
+        dtype=dtype_config,
+        logger=logger
     )
     logger.info('Finished reading DerivOne Report')
-    logger.info(f'DerivOne Shape before deleting duplicates: {df_derivone.shape}')
+    logger.info(f'DerivOne Shape (after deleting duplicates): {df_derivone.shape}')
 
     # # Deduplicate DerivOne data
     # d1_deduplicator = DerivOneDeduplicator(data=df_derivone, asset_class=asset_class, environment=Config().env.lower(),
@@ -306,8 +280,12 @@ def process_tsr(tsr_filepaths, asset_class, df_gleif):
         skipfooter=constants.TSR_SKIPFOOTERS.get(Config().regime.upper()),
         asset_class=asset_class,
         dtype=str,
-        regime=Config().regime.upper()
+        regime=Config().regime.upper(),
+        logger=logger
     )
+
+    initial_row_count = len(df_tsr)
+    logger.debug(f'Initial TSR Row count: {initial_row_count}')
 
     tsr_key_generator = None
 
@@ -358,7 +336,7 @@ def process_tsr(tsr_filepaths, asset_class, df_gleif):
 
     logger.info(f'{Config().regime.upper()}-{asset_class} TSR Shape: {df_tsr.shape}')
 
-    return df_tsr
+    return df_tsr, initial_row_count
 
 
 def process_msr(tsr_filepaths, asset_class, df_gleif):
@@ -373,8 +351,12 @@ def process_msr(tsr_filepaths, asset_class, df_gleif):
         skipfooter=constants.MSR_SKIPFOOTERS.get(Config().regime.upper()),
         asset_class=asset_class,
         dtype=str,
-        regime=Config().regime.upper()
+        regime=Config().regime.upper(),
+        logger=logger
     )
+
+    initial_row_count = len(df_msr)
+    logger.debug(f'Initial MSR Row count: {initial_row_count}')
 
     if Config().regime.upper() == constants.ASIC:
         if Config().env.lower() not in ['prod']:
@@ -392,7 +374,7 @@ def process_msr(tsr_filepaths, asset_class, df_gleif):
     df_msr = utility.add_entity_names(input_df=df_msr, gleif_dict=df_gleif, lei_columns=lei_columns)
 
     logger.info(f'{Config().regime.upper()}-{asset_class} MSR Shape: {df_msr.shape}')
-    return df_msr
+    return df_msr, initial_row_count
 
 
 def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config):
@@ -414,7 +396,7 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
 
         if asset_class == constants.COLLATERAL:
             logger.info(f'Starting Margin State Report (MSR) Specific Processing...')
-            df_merged = process_msr(tsr_filepaths, asset_class, gleif_dict)
+            df_merged, initial_row_count = process_msr(tsr_filepaths, asset_class, gleif_dict)
 
             logger.info('Adding report_date to underlying data')
             # df_merged.loc[:, 'report_date'] = pd.Series(report_date, index=df_merged.index)
@@ -425,7 +407,7 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
         else:
             # Process TSR and DerivOne data
             logger.info(f'Starting TSR Processing...')
-            df_tsr = process_tsr(tsr_filepaths, asset_class, gleif_dict)
+            df_tsr, initial_row_count = process_tsr(tsr_filepaths, asset_class, gleif_dict)
             logger.info(f'TSR shape: {df_tsr.shape}')
             logger.info(f'TSR Processing finished.')
 
@@ -443,6 +425,28 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
 
                 # Merge TSR and DerivOne datasets
                 df_merged = merge_datasets(df_tsr, df_derivone, asset_class)
+
+                if Config().regime.upper() == constants.EMIR_REFIT and asset_class.upper() in [constants.EQUITY_DERIVATIVES]:
+                    initial_len = len(df_merged)
+                    logger.debug(f"Before removing trades with empty Trade_Ref: {df_merged.shape}")
+                    # First filter for matched trades only
+                    matched_mask = df_merged['matching_flag'] == 'matched'
+                    matched_df = df_merged[matched_mask]
+                    # Remove empty Trade_Ref from matched trades
+                    matched_df = matched_df[matched_df['Deriv1_Trade Ref'] != '']
+                    logger.debug(f"After removing matched trades with empty Trade_Ref: {matched_df.shape}")
+                    cleaned_len = len(matched_df)
+                    # Drop duplicates from matched trades
+                    matched_df = matched_df.drop_duplicates(subset=['Deriv1_Trade Ref', 'Counterparty 1 (Reporting counterparty)', 'UTI'])
+                    # Combine back with unmatched trades
+                    unmatched_df = df_merged[~matched_mask]
+                    df_merged = pd.concat([matched_df, unmatched_df])
+
+                    final_len = len(df_merged)
+                    logger.debug(f"Rows removed due to empty trade ref: {initial_len - cleaned_len}")
+                    logger.debug(f"Duplicate rows removed: {cleaned_len - final_len}")
+                    del initial_len, final_len
+                    logger.debug(f"EMIR_REFIT-EQD merged data shape after removing duplicates: {df_merged.shape}")
 
                 # Handle column validation or saving
                 df_merged['matching_flag'] = df_merged['matching_flag'].replace('left_only', 'unmatched')
@@ -464,22 +468,31 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
         json_file_path = get_model_configs(env=Config().env).get(Config().regime.upper())['column_mapping']
         data_processor.data = rename_columns_from_json(data_processor.data, json_file_path)
 
-        # --- 2) Construct the JSON file path in a safe manner ---
-        column_json_location = get_column_json_location(Config().env.lower())
-        safe_base_dir = column_json_location[regime_name].get(asset_class)
-        safe_filename = f"{regime_name.lower()}_{asset_class.lower()}_pandq_columns.json"
-        logger.debug(f'safe_base_dir: {safe_base_dir}')
-        logger.debug(f'safe_filename: {safe_filename}')
-        # json_file = os.path.join(safe_base_dir, safe_filename)
-        json_file = utility.get_safe_filepath(safe_base_dir, safe_filename)
+        # Construct the JSON file path mapping from config
+        column_json_map = get_column_json_location(Config().env.lower())
 
-        if os.path.exists(json_file):
+        # Validate inputs
+        regime_upper = regime_name.upper()
+        if regime_upper not in column_json_map:
+            raise ValueError(f"Unsupported regime: {regime_name}")
+        if asset_class not in column_json_map[regime_upper]:
+            raise ValueError(f"Unsupported asset class: {asset_class} for regime={regime_name}")
+
+        # Get safe filepath (prevents path traversal vulnerabilities)
+        json_file_path = column_json_map[regime_name.upper()][asset_class]
+        base_dir = os.path.dirname(json_file_path)
+        file_name = os.path.basename(json_file_path)
+        safe_path = utility.get_safe_filepath(base_dir, file_name)
+
+        if os.path.exists(safe_path):
             logger.info("JSON file already exists, loading columns...")
-            saved_columns = load_columns_from_json(regime_name, asset_class)
+            saved_columns = load_columns_from_json(safe_path)
+
             # (Optional) Check for new columns
             current_columns = set(data_processor.data.columns)
             saved_columns_set = set(saved_columns)
             new_columns = current_columns - saved_columns_set
+
             if new_columns:
                 logger.warning(f"New columns detected that are not in the saved JSON: {new_columns}")
 
@@ -487,7 +500,15 @@ def process_asset_class(asset_class, tsr_filepaths, gleif_dict, filepath_config)
             data_processor.data = data_processor.data[saved_columns]
         else:
             logger.info("JSON file does not exist, creating it for the first run.")
-            save_columns_to_json(data_processor.data, regime_name, asset_class)
+            save_columns_to_json(data_processor.data, safe_path)
+
+        final_row_count = len(data_processor.data)
+        logger.debug(f'Final row count: {final_row_count}')
+
+        # Validate initial input and output count
+        utility.log_row_count_validation(initial_row_count, final_row_count, logger,
+                                         context_name=use_case_name.upper() + f'-{regime_name}-{asset_class}',
+                                         input_label="Initial", output_label="Final", count_type="row", separator_char="=")
 
         # Save the cleaned and updated data
         logger.info(f'Saving the final processed data...')
@@ -558,7 +579,8 @@ def main():
         filepath_list=gleif_filepath,
         skiprow=0,
         skipfooter=0,
-        dtype=str
+        dtype=str,
+        logger=logger
     )
     logger.info(f'GLEIF report shape: {df_gleif.shape}')
     logger.info(f'GLEIF report Column Names: {list(df_gleif.columns)}')
@@ -576,6 +598,7 @@ def main():
     # Process each asset class
     for asset_class in asset_classes:
         try:
+            # SNYK ignore next line: Hardcoded path, no user input can cause traversal
             df_merged = process_asset_class(utility.sanitize_asset_class(asset_class), tsr_filepaths, gleif_dict, filepath_config)
 
             # Log matching status summary for this asset class

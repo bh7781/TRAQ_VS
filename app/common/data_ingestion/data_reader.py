@@ -6,6 +6,7 @@ from common import constants
 from common.config.args_config import Config
 from common.data_ingestion.data_filters import TSRFilters
 from common.config.tsr_attribute_mappings import PRODUCT_TAXONOMY
+from common.config.ms_entity_mappings import ms_entity_lei_mapping
 
 
 class DataReader(ABC):
@@ -37,6 +38,8 @@ class DataReader(ABC):
         self.dtype = dtype
         self.logger = logger
         self.nrows = nrows  # Number of rows to read
+        self.end_columns = []
+        self.logger.debug(f'Logger object inside DataReader: {self.logger}')
 
     @abstractmethod
     def get_report(self, file_paths, usecols=None, nrows=None):
@@ -172,6 +175,21 @@ class DataReader(ABC):
 
             # Combine all data_frames into a single DataFrame
             df_final = pd.concat(data_frames, ignore_index=True)
+
+            # Sort columns, ensuring end_columns exist (empty if not present)
+            if self.end_columns:
+                # First ensure the end columns exist (will create them if missing)
+                for col in self.end_columns:
+                    if col not in df_final.columns:
+                        df_final[col] = ''  # Create empty column with empty strings
+
+                # Now sort all other columns
+                other_cols = sorted(col for col in df_final.columns if col not in self.end_columns)
+                df_final = df_final.reindex(columns=other_cols + self.end_columns)
+            else:
+                # For non-TSR files, just sort all columns
+                df_final = df_final.reindex(columns=sorted(df_final.columns))
+
             return df_final
 
         raise ValueError("'file_paths' should be a string or a list of strings")
@@ -191,6 +209,7 @@ class DerivOneDataReader(DataReader):
         """
         super().__init__(skiprow=skiprow, skipfooter=skipfooter, report_type=report_type,
                          asset_class=asset_class, dtype=dtype, regime=regime, logger=logger, nrows=nrows)
+        self.logger.debug(f'Logger object inside DerivOneDataReader: {self.logger}')
         # self.nrows = 1000
 
     def get_report(self, file_paths, usecols=None, nrows=None):
@@ -198,6 +217,32 @@ class DerivOneDataReader(DataReader):
         Reads DerivOne data from the specified file paths.
         """
         data = self.read_csv_data(file_paths, dtype=self.dtype, usecols=usecols, nrows=nrows)
+        self.logger.debug(f'-------------Deriv1 Shape: {data.shape}')
+
+        # Add LEI mapping for EQD asset class
+        if self.asset_class == constants.EQUITY_SWAPS:
+            # Define Party1 LEI column name
+            party1_lei_col = 'party1_lei_derived'
+
+            if 'MasCounterparty1' not in data.columns:
+                self.logger.warning("MasCounterparty1 column not found in FRED data. Adding empty Party1 LEI column.")
+                data[party1_lei_col] = ''
+                return data
+
+            # Create Party1 LEI column using the mapping
+            lei_mapping = data['MasCounterparty1'].map(ms_entity_lei_mapping).fillna('')
+            data = pd.concat([data, pd.Series(lei_mapping, name=party1_lei_col)], axis=1)
+            self.logger.debug(f'-------------Deriv1 Shape: {data.shape}')
+
+            # Find and log any new company codes not in the mapping
+            new_company_codes = set(data[data['MasCounterparty1'].map(ms_entity_lei_mapping).isna()]['MasCounterparty1'].unique())
+
+            if new_company_codes and hasattr(self, 'logger') and self.logger is not None:
+                try:
+                    self.logger.warning(f"Found {len(new_company_codes)} new company codes not present in mapping: {sorted(new_company_codes)}")
+                except AttributeError:
+                    print(f"Found {len(new_company_codes)} new company codes not present in mapping: {sorted(new_company_codes)}")
+
         return data
 
 
@@ -213,6 +258,8 @@ class TSRDataReader(DataReader):
         """
         super().__init__(skiprow=skiprow, skipfooter=skipfooter, report_type=report_type,
                          asset_class=asset_class, dtype=dtype, regime=regime, logger=logger, nrows=nrows)
+        self.end_columns = ['file_name', 'reporting_obligation']
+        self.logger.debug(f'Logger object inside TSRDataReader: {self.logger}')
 
     def get_report(self, file_paths, usecols=None, nrows=None):
         """
@@ -231,6 +278,7 @@ class TSRDataReader(DataReader):
             data['Reporting Type'] = data['Counterparty 1 (Reporting counterparty)'].apply(lambda x: 'FIRM_REPORTED' if x in valid_ms_counterparties else 'DELEGATED')
 
             # Filter data based on the 'Reporting Type' column
+            # As discussed with Kayleigh and Muzzamil, diagnostic testing requires complete TSR data.
             # self.logger.info(f'Filtering EMIR_REFIT {self.asset_class} TSR to include only MSESE, MSCIP, MSBV, & MSBIL.')
             # data = data[data['Reporting Type'] == 'Firm Reported']
 
@@ -265,6 +313,7 @@ class MSRDataReader(DataReader):
         """
         super().__init__(skiprow=skiprow, skipfooter=skipfooter, report_type=report_type,
                          asset_class=asset_class, dtype=dtype, regime=regime, logger=logger, nrows=nrows)
+        self.logger.debug(f'Logger object inside MSRDataReader: {self.logger}')
 
     def get_report(self, file_paths, usecols=None, nrows=None):
         """
@@ -293,6 +342,7 @@ class GLEIFDataReader(DataReader):
             'Entity.LegalName',
         ]
         # self.nrows = 500
+        self.logger.debug(f'Logger object inside GLEIFDataReader: {self.logger}')
 
     def get_report(self, file_paths, usecols=None, nrows=None):
         """

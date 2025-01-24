@@ -12,11 +12,9 @@ class DataMerger:
         Matching keys will be dynamically loaded based on the regulator and asset class.
         """
         self.use_case_name = use_case_name
-        self.logger = get_logger(__name__, Config().env.lower(), Config().run_date.lower(),
-                                 use_case_name=self.use_case_name)
+        self.logger = get_logger(__name__, Config().env.lower(), Config().run_date.lower(), use_case_name=self.use_case_name)
 
-        self.logger.info(
-            f"Initializing DataMerger for {regulator} - {asset_class if asset_class else 'all asset classes'}")
+        self.logger.info(f"Initializing DataMerger for {regulator} - {asset_class if asset_class else 'all asset classes'}")
         self.logger.info(f"Input shapes - Left DataFrame: {df_left.shape}, Right DataFrame: {df_right.shape}")
 
         # Instead of copying entire dataframes, we'll only add prefixes to column names
