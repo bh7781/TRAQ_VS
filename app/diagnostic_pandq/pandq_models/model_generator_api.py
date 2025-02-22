@@ -1,9 +1,9 @@
-# model_generator_api.py
 import os
 from common.config.args_config import Config
 from diagnostic_pandq.pandq_models.regime_config import RegimeConfig
 from diagnostic_pandq.pandq_models.data_type_identifier import DataTypeIdentifier
 from diagnostic_pandq.pandq_models.model_generator import ModelGenerator
+
 
 class PANDQModelsGenerator:
     """

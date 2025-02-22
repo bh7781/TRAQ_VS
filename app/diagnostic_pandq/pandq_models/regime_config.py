@@ -1,7 +1,7 @@
-# regime_config.py
 from diagnostic_pandq.pandq_models.model_config import MODEL_CONFIGS
 from common.config.logger_config import get_logger
 from common.config.args_config import Config
+
 
 class RegimeConfig:
     """
