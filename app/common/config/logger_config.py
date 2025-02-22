@@ -2,82 +2,97 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 import psutil
+from datetime import datetime
 from common.config.args_config import Config
-from diagnostic_pandq.output_filepath import get_output_location
-
 
 class MemoryUsageFilter(logging.Filter):
+    """
+    A logging filter that adds memory usage (in MB) to log records.
+    """
     def filter(self, record):
+        # Get the current process's memory usage information.
         process = psutil.Process()
         mem_info = process.memory_info()
-        record.memory_usage = mem_info.rss / (1024 * 1024)  # Convert bytes to MB
+        # Convert the resident set size (RSS) from bytes to megabytes.
+        record.memory_usage = mem_info.rss / (1024 * 1024)
         return True
 
-
-def get_logger(name, env=None, date=None, use_case_name='default', log_to_file=True):
+def get_logger(name, env=None, date=None, use_case_name='default', log_to_file=True, log_directory=None):
     """
-    Creates a logger with optional file logging. By default, logs only to files.
+    Creates and returns a logger with optional file logging.
+    This function assumes the provided log_directory already exists.
+    If log_directory is None, only console logging will be used.
+    
+    Parameters:
+        name (str): The name for the logger instance.
+        env (str, optional): Environment (e.g., 'prod', 'qa'). Defaults to Config().env.lower() if not provided.
+        date (str, optional): Report / Run date string to include in the log file name. If not provided, today's date is used.
+        use_case_name (str, optional): Use case name to include in the log file name.
+        log_to_file (bool, optional): Whether to enable logging to a file.
+        log_directory (str, optional): The directory where log files will be stored. If not provided and log_to_file is True, file logging is skipped.
+    
+    Returns:
+        logging.Logger: A logger configured with a console handler and, optionally, a rotating file handler.
     """
-
-    # Create a logger with the specified name
+    # Retrieve or create a logger with the specified name.
     logger = logging.getLogger(name)
-
-    # If the logger does not have any handlers (meaning it's newly created), add handlers
+    
+    # Only configure the logger if it doesn't already have handlers.
     if not logger.handlers:
-        # Set the overall logging level of the logger to DEBUG
+        # Set the logging level to DEBUG to capture all log messages.
         logger.setLevel(logging.DEBUG)
-
-        # Create the format of the log message, including memory usage
+        
+        # Define the log message format, including memory usage.
         log_format = "%(asctime)s | %(levelname)s | %(filename)s | %(funcName)s | %(lineno)d | %(memory_usage).2f MB | %(message)s"
+        
         formatter = logging.Formatter(log_format)
-
-        # Create a console handler that logs messages to the console
+        
+        # Create a console handler for logging to the console.
         console_handler = logging.StreamHandler()
+        
         console_handler.setLevel(logging.DEBUG)
-
-        # Add the MemoryUsageFilter to the console handler
+        
+        # Attach the MemoryUsageFilter to include memory usage information.
         console_handler.addFilter(MemoryUsageFilter())
-
-        # Set the formatter for the console handler
+        
+        # Set the formatter for the console handler.
         console_handler.setFormatter(formatter)
-
-        # Add the console handler to the logger
+        
+        # Add the console handler to the logger.
         logger.addHandler(console_handler)
-
-        # If log_to_file is True, set up file logging
-        if log_to_file:
-            # Use default env and date if not provided
+        
+        # Set up file logging if enabled and a log directory is provided.
+        if log_to_file and log_directory:
+            
+            # Use provided env, or fallback to Config if not provided.
             if env is None:
                 env = Config().env.lower()
+            
+            # If no date is provided, use today's date in YYYY-MM-DD format.
             if date is None:
-                date = 'default_date'  # Use default value or fetch current date
-
-            # Define the log directory path based on the provided environment
-            log_directory = get_output_location(env=env).get('log_files_location')
-
-            # Create the log directory if it doesn't exist
-            # if not os.path.exists(log_directory):
-            #     os.makedirs(log_directory, exist_ok=True)
-
-            # Set up the log file handler with rotation (50MB per file, up to 5 backups)
+                date = datetime.now().strftime('%Y%m%d')
+            
+            # Construct the log file name.
             log_file_name = f'{use_case_name}_{env}_{Config().regime.lower()}_{date}.log'
+            
+            # Create a RotatingFileHandler.
             file_handler = RotatingFileHandler(
                 os.path.join(log_directory, log_file_name),
-                maxBytes=50 * 1024 * 1024,
-                backupCount=5
+                maxBytes=50 * 1024 * 1024,  # Maximum file size of 50 MB
+                backupCount=5               # Up to 5 backup log files
             )
 
-            # Set the logging level of the file handler to DEBUG
+            # Set the file handler's log level to DEBUG so that it captures all messages.
             file_handler.setLevel(logging.DEBUG)
-
-            # Add the MemoryUsageFilter to the file handler
+            
+            # Add the MemoryUsageFilter to the file handler to include memory usage info in every log record.
             file_handler.addFilter(MemoryUsageFilter())
-
-            # Set the formatter for the file handler
+            
+            # Apply the formatter to the file handler so that log messages adhere to the specified format.
             file_handler.setFormatter(formatter)
-
-            # Add the file handler to the logger
+            
+            # Attach the file handler to the logger so that log messages are written to the file.
             logger.addHandler(file_handler)
-
-    # Return the configured logger
+    
+    # Return the configured logger.
     return logger
