@@ -2,7 +2,9 @@ import os
 from common import constants
 from common.utility import adjust_path_for_os
 
+
 MODEL_CONFIGURATIONS = {
+
     constants.JFSA: {
         'dq_config_path_qa': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/qa/pandq_daily/jfsa2'),
         'dq_config_path_prod': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/prod/pandq_daily/jfsa2'),
@@ -56,7 +58,8 @@ MODEL_CONFIGURATIONS = {
         ],
         'dq_config_path_qa': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/qa/common'),
         'dq_config_path_prod': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/prod/common'),
-        'output_directory': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/qa/pandq_config/common/metadata'),
+        # 'output_directory': adjust_path_for_os('/v/region/na/appl/gtr/ttro_it_diagnostic/data/qa/pandq_config/common/metadata'),
+        'output_directory': rf'C:\Users\{os.getlogin()}\Morgan Stanley\Tech & TRAQ Automation - Diagnostic Testing\pandq_config\common\metadata',
         'model_version': '22.02.2025',
         'model_id': 'Q1234',
         'model_name': 'COMMON',

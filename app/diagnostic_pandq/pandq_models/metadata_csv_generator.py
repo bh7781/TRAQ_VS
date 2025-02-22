@@ -4,6 +4,7 @@ from common.config.logger_config import get_logger
 from common.config.args_config import Config
 from column_datatype_identifier import detect_delimiter
 
+
 class MetadataCSVGenerator:
     """
     Generates the required metadata CSV files:
@@ -12,7 +13,7 @@ class MetadataCSVGenerator:
       - files.csv: Mapping of file names to IDs and descriptions.
       - models.csv: Model metadata.
     """
-    def __init__(self, regime_config, column_types, use_case_name):
+    def __init__(self, regime_config, column_types, use_case_name, logger=None):
         """
         Initializes the generator with the configuration and identified column types.
         """
@@ -20,7 +21,7 @@ class MetadataCSVGenerator:
         self.regime_config = regime_config
         self.column_types = column_types  # Dictionary: file_path -> { column_name: data_type, ... }
         self.env = Config().env.lower()
-        self.logger = get_logger(__name__, self.env, Config().run_date, use_case_name=self.use_case_name)
+        self.logger = logger if logger is not None else get_logger(__name__, Config().env, Config().run_date, use_case_name=use_case_name, log_to_file=False)
 
     def generate_file_columns(self):
         """
@@ -40,7 +41,7 @@ class MetadataCSVGenerator:
                         "COLUMN_ID": column_id,
                         "SRC_FILE_ID": file_id,
                         "COLUMN_NAME": col_name,
-                        "DESCRIPTION": col_name,
+                        "DESCRIPTION": '',
                         "DATA_TYPE": 'String',  # Fixed as 'String'
                         "LENGTH": 256,
                         "SCALE": 0,
@@ -56,88 +57,86 @@ class MetadataCSVGenerator:
             self.logger.debug(f"Writing filecolumns.csv to {output_path}")
             df_file_columns.to_csv(output_path, index=False)
             self.logger.info("Successfully generated filecolumns.csv")
-        except Exception as e:
+        except Exception as _:
             self.logger.error("Error generating filecolumns.csv", exc_info=True)
             raise
 
     def generate_filedqconfig(self):
-    """
-    Generates filedqconfig.csv with file paths and configuration details.
-    The file paths are saved in UNIX format, the delimiter is detected from each file,
-    and the frequency is set to 'NULL' for a single entry per environment.
-    
-    This implementation first lists all DEV file paths, then all PROD file paths.
-    """
-    try:
-        self.logger.info("Starting generation of filedqconfig.csv")
-        files = list(self.column_types.keys())
-        file_ids = list(range(1, len(files) + 1))
-        dq_config_text = self.regime_config.config.get('filesdqconfig_text', '')
+        """
+        Generates filedqconfig.csv with file paths and configuration details.
+        The file paths are saved in UNIX format, the delimiter is detected from each file,
+        and the frequency is set to 'NULL' for a single entry per environment.
 
-        def to_unix_path(path):
-            unix_path = path.replace('\\', '/')
-            if unix_path.startswith('//'):
-                unix_path = unix_path[1:]
-            return unix_path
+        This implementation first lists all DEV file paths, then all PROD file paths.
+        """
+        try:
+            self.logger.info("Starting generation of filedqconfig.csv")
+            files = list(self.column_types.keys())
+            # file_ids = list(range(1, len(files) + 1))
+            dq_config_text = self.regime_config.config.get('filesdqconfig_text', '')
 
-        # Generate DEV records first.
-        dev_records = []
-        for idx, file in enumerate(files):
-            file_id = idx + 1
-            delimiter = detect_delimiter(file)
-            unix_path = to_unix_path(self.regime_config.get_path('QA'))
-            dev_records.append({
-                "SRC_FILE_ID": file_id,
-                "FILE_PATH": unix_path,
-                "ENVIRONMENT": "DEV",
-                "FILE_TYPE": "csv",
-                "DELIMITER": delimiter,
-                "HAS_HEADER": "Y",
-                "HAS_TRAILER": "N",
-                "HEADER_FILE_NAME": "",
-                "HEADER_FILE_PATH": "",
-                "NUMBER_OF_COLUMNS": len(self.column_types[file]),
-                "FREQUENCY": "NULL",
-                "REGION": "ALL",
-                "TEXT": dq_config_text,
-                "SOURCE_CONTACT": "ttro_it_diagnostic"
-            })
+            def to_unix_path(path):
+                unixpath = path.replace('\\', '/')
+                if unixpath.startswith('//'):
+                    unixpath = unixpath[1:]
+                return unixpath
 
-        # Generate PROD records next.
-        prod_records = []
-        for idx, file in enumerate(files):
-            file_id = idx + 1
-            delimiter = detect_delimiter(file)
-            unix_path = to_unix_path(self.regime_config.get_path('PROD'))
-            prod_records.append({
-                "SRC_FILE_ID": file_id,
-                "FILE_PATH": unix_path,
-                "ENVIRONMENT": "PROD",
-                "FILE_TYPE": "csv",
-                "DELIMITER": delimiter,
-                "HAS_HEADER": "Y",
-                "HAS_TRAILER": "N",
-                "HEADER_FILE_NAME": "",
-                "HEADER_FILE_PATH": "",
-                "NUMBER_OF_COLUMNS": len(self.column_types[file]),
-                "FREQUENCY": "NULL",
-                "REGION": "ALL",
-                "TEXT": dq_config_text,
-                "SOURCE_CONTACT": "ttro_it_diagnostic"
-            })
+            # Generate DEV records first.
+            dev_records = []
+            for idx, file in enumerate(files):
+                file_id = idx + 1
+                delimiter = detect_delimiter(file)
+                unix_path = to_unix_path(self.regime_config.get_path('QA'))
+                dev_records.append({
+                    "SRC_FILE_ID": file_id,
+                    "FILE_PATH": unix_path,
+                    "ENVIRONMENT": "DEV",
+                    "FILE_TYPE": "csv",
+                    "DELIMITER": delimiter,
+                    "HAS_HEADER": "Y",
+                    "HAS_TRAILER": "N",
+                    "HEADER_FILE_NAME": "",
+                    "HEADER_FILE_PATH": "",
+                    "NUMBER_OF_COLUMNS": len(self.column_types[file]),
+                    "FREQUENCY": "NULL",
+                    "REGION": "ALL",
+                    "TEXT": dq_config_text,
+                    "SOURCE_CONTACT": "ttro_it_diagnostic"
+                })
 
-        # Concatenate DEV records first, then PROD records.
-        import pandas as pd
-        all_records = dev_records + prod_records
-        df_filedqconfig = pd.DataFrame(all_records)
-        output_path = os.path.join(self.regime_config.get_output_path(), 'filedqconfig.csv')
-        self.logger.debug(f"Writing filedqconfig.csv to {output_path}")
-        df_filedqconfig.to_csv(output_path, index=False)
-        self.logger.info("Successfully generated filedqconfig.csv")
-    except Exception:
-        self.logger.error("Error generating filedqconfig.csv", exc_info=True)
-        raise
+            # Generate PROD records next.
+            prod_records = []
+            for idx, file in enumerate(files):
+                file_id = idx + 1
+                delimiter = detect_delimiter(file)
+                unix_path = to_unix_path(self.regime_config.get_path('PROD'))
+                prod_records.append({
+                    "SRC_FILE_ID": file_id,
+                    "FILE_PATH": unix_path,
+                    "ENVIRONMENT": "PROD",
+                    "FILE_TYPE": "csv",
+                    "DELIMITER": delimiter,
+                    "HAS_HEADER": "Y",
+                    "HAS_TRAILER": "N",
+                    "HEADER_FILE_NAME": "",
+                    "HEADER_FILE_PATH": "",
+                    "NUMBER_OF_COLUMNS": len(self.column_types[file]),
+                    "FREQUENCY": "NULL",
+                    "REGION": "ALL",
+                    "TEXT": dq_config_text,
+                    "SOURCE_CONTACT": "ttro_it_diagnostic"
+                })
 
+            # Concatenate DEV records first, then PROD records.
+            all_records = dev_records + prod_records
+            df_filedqconfig = pd.DataFrame(all_records)
+            output_path = os.path.join(self.regime_config.get_output_path(), 'filedqconfig.csv')
+            self.logger.debug(f"Writing filedqconfig.csv to {output_path}")
+            df_filedqconfig.to_csv(output_path, index=False)
+            self.logger.info("Successfully generated filedqconfig.csv")
+        except Exception:
+            self.logger.error("Error generating filedqconfig.csv", exc_info=True)
+            raise
 
     def generate_files(self):
         """
@@ -162,7 +161,7 @@ class MetadataCSVGenerator:
             self.logger.debug(f"Writing files.csv to {output_path}")
             df_files.to_csv(output_path, index=False)
             self.logger.info("Successfully generated files.csv")
-        except Exception as e:
+        except Exception as _:
             self.logger.error("Error generating files.csv", exc_info=True)
             raise
 
@@ -184,7 +183,7 @@ class MetadataCSVGenerator:
             self.logger.debug(f"Writing models.csv to {output_path}")
             df_models.to_csv(output_path, index=False)
             self.logger.info("Successfully generated models.csv")
-        except Exception as e:
+        except Exception as _:
             self.logger.error("Error generating models.csv", exc_info=True)
             raise
 
