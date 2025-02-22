@@ -40,7 +40,7 @@ class ModelGenerator:
                     "COLUMN_NAME": column,
                     "DESCRIPTION": '',
                     # "DATA_TYPE": data_type,
-                    "DATA_TYPE": 'STRING',  # Keep DATA_TYPE fixed as 'STRING'
+                    "DATA_TYPE": 'String',  # Keep DATA_TYPE fixed as 'String'
                     "LENGTH": 256,
                     "SCALE": 0,
                     "IS_NULL": 1,

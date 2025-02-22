@@ -6,15 +6,15 @@ from common.utility import adjust_path_for_os
 
 def get_model_configs(env):
     # Define base paths for different environments
-    # pandq_output_base_path = f'/v/region/na/appl/gtr/ttro_it_diagnostic/data/{env}/pandq_daily'
+    pandq_output_base_path = f'/v/region/na/appl/gtr/ttro_it_diagnostic/data/{env}/pandq_daily'
     # For local testing
-    pandq_output_base_path = rf'C:\Users\{os.getlogin()}\Morgan Stanley\Tech & TRAQ Automation - Diagnostic Testing\pandq_daily'
+    # pandq_output_base_path = rf'C:\Users\{os.getlogin()}\Morgan Stanley\Tech & TRAQ Automation - Diagnostic Testing\pandq_daily'
     pandq_output_base_path = adjust_path_for_os(pandq_output_base_path)
 
     # Define base paths for different environments
-    # pandq_config_base_path = f'/v/region/na/appl/gtr/ttro_it_diagnostic/data/{env}/pandq_config'
+    pandq_config_base_path = f'/v/region/na/appl/gtr/ttro_it_diagnostic/data/{env}/pandq_config'
     # For local testing
-    pandq_config_base_path = rf'C:\Users\{os.getlogin()}\Morgan Stanley\Tech & TRAQ Automation - Diagnostic Testing\pandq_config'
+    # pandq_config_base_path = rf'C:\Users\{os.getlogin()}\Morgan Stanley\Tech & TRAQ Automation - Diagnostic Testing\pandq_config'
     pandq_config_base_path = adjust_path_for_os(pandq_config_base_path)
 
     # Construct output file paths for each regime and asset class
