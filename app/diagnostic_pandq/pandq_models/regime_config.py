@@ -1,7 +1,7 @@
-from diagnostic_pandq.pandq_models.model_config import get_model_configs
+# regime_config.py
+from diagnostic_pandq.pandq_models.model_config import MODEL_CONFIGS
 from common.config.logger_config import get_logger
 from common.config.args_config import Config
-
 
 class RegimeConfig:
     """
@@ -22,15 +22,15 @@ class RegimeConfig:
         """
         Loads the regime-specific configurations.
         """
-        configs = get_model_configs(self.env).get(self.regime)
-        if not configs:
+        # If your MODEL_CONFIGS is not keyed by environment, simply use:
+        regime_config = MODEL_CONFIGS.get(self.regime)
+        if not regime_config:
             raise ValueError(f"Configuration for regime {self.regime} not found.")
-
-        return configs
+        return regime_config
 
     def get_path(self, env):
         """
-        Returns the path based on the environment.
+        Returns the filesdqconfig path based on the environment.
         """
         if env.lower() == 'qa':
             return self.config['filesdqconfig_path_qa']
@@ -49,11 +49,16 @@ class RegimeConfig:
             'model_name': self.config['model_name'],
         }
 
-    def get_input_files_path(self):
+    def get_input_files(self):
         """
-        Returns the input files folder path.
+        Returns the input files for the regime.
+        If the configuration has 'input_file_paths', returns that list;
+        otherwise, returns the folder path from 'input_files_folder_path'.
         """
-        return self.config['input_files_folder_path']
+        if 'input_file_paths' in self.config:
+            return self.config['input_file_paths']
+        else:
+            return self.config['input_files_folder_path']
 
     def get_output_path(self):
         """
